@@ -1,0 +1,145 @@
+<!doctype html> 
+<html lang="en"> 
+<head> 
+	<meta charset="UTF-8" />
+	<title>Phaser - Making your first game, part 1</title>
+	<script type="text/javascript" src="js/phaser.js"></script>
+	<script type="text/javascript" src="js/utils.js"></script>
+	<script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+<button id="debug" style="display: none;"/>
+<script type="text/javascript">
+document.documentElement.webkitRequestFullScreen();
+var socket = io();
+var orienObject = {
+	absolute:0,
+	alpha:0,
+	beta:0,
+	gamma:0
+};
+
+function handleOrientation(event) {
+	
+	if (isMobile.any()) {
+		orienObject.absolute = event.absolute;
+		orienObject.alpha = event.alpha;
+		orienObject.beta = event.beta;
+		orienObject.gamma = event.gamma;
+		
+		socket.emit('orientation', orienObject);		
+	} 
+}
+
+if (!isMobile.any()) {
+	socket.on('orientationReceive', function(orientationObject) {
+		orienObject.alpha = orientationObject.alpha;
+		orienObject.absolute = orientationObject.absolute;
+		orienObject.beta = orientationObject.beta;
+		orienObject.gamma = orientationObject.gamma;
+
+		//console.log(orienObject.beta);
+	});
+	
+	socket.on('motionReceive', function(motionObject) {
+		console.log(motionObject);
+	});
+
+	socket.on('s_line_up', function() {
+		console.log('s_line_up');
+		line.body.velocity.y -= power*Math.cos(line.angle*Math.PI/180);
+		line.body.velocity.x += power*Math.sin(line.angle*Math.PI/180);
+	});
+}
+window.addEventListener('deviceorientation', handleOrientation);
+
+if (!isMobile.any()) {
+	var game = new Phaser.Game(window.screen.width, window.screen.height, Phaser.AUTO, '', { preload: preload, create: create, update: update, render: render });
+	var cursor;
+	var line;
+	var power = 10;
+	var rotationSpeed = 1;
+	var balanceBeta = 0;
+
+	function preload() {
+	    game.load.image('bg', 'assets/bg.png');
+	    game.load.image('line', 'assets/line.png');
+	}
+
+	function create() {
+		game.scale.fullScreenScaleMode = Phaser.ScaleManager.SHOW_ALL;
+		game.scale.startFullScreen(false);
+
+		game.physics.startSystem(Phaser.Physics.ARCADE);
+		game.add.sprite(0, -500, 'bg');
+
+		
+		line = game.add.sprite(0, 0, 'line');
+		game.physics.arcade.enable(line);
+		line.body.collideWorldBounds = true;
+		line.body.gravity.y=200;
+		line.body.bounce.y = 0.2;
+		line.angle = Math.random()*90;
+		line.position.x = game.width/2 - line.width/2;
+		line.anchor.x = 0.5;
+		line.anchor.y = 0.5;
+
+		cursor = game.input.keyboard.createCursorKeys();
+	    
+	    game.input.onDown.add(function () {
+		    	game.scale.startFullScreen(false);
+		    }, this);
+	}
+	
+
+	function update() {
+		if (cursor.up.isDown) {
+			line.body.velocity.y -= power*Math.cos(line.angle*Math.PI/180);
+			line.body.velocity.x += power*Math.sin(line.angle*Math.PI/180);
+		} else if (cursor.down.isDown) {
+			line.body.velocity.y += power*Math.cos(line.angle*Math.PI/180);
+			line.body.velocity.x -= power*Math.sin(line.angle*Math.PI/180);
+		}
+
+		
+
+		if (cursor.left.isDown) {
+			line.angle -= rotationSpeed;
+		} else if (cursor.right.isDown) {
+			line.angle += rotationSpeed;
+		}
+
+		line.angle = orienObject.beta - balanceBeta;
+		//console.log(line.angle);
+	} 
+
+	function render() {
+		
+	}
+} else {
+	
+	var game = new Phaser.Game(window.screen.width, window.screen.height, Phaser.AUTO, '', {create:m_create, update: m_update });
+
+	function m_create() {
+		game.scale.fullScreenScaleMode = Phaser.ScaleManager.EXACT_FIT;
+		game.scale.startFullScreen(false);
+	}
+
+	function m_update() {
+		if (game.input.pointer1.isDown) {
+			socket.emit('m_line_up');
+		}
+	}
+	// var debug = document.getElementById('debug');
+	// debug.innerHTML = 'dsadas';
+}
+</script>
+
+</body>
+</html>

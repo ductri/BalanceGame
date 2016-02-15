@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+</head>
+<body onkeydown="keyEvent(event)" >
+<style type="text/css">
+	.ball {
+  position: absolute;
+  top   : 350px;
+  left  : 550px;
+  width : 20px;
+  height: 20px;
+  background: green;
+  border-radius: 100%;
+}
+</style>
+<canvas id="mycanvas" width="1360" height="600"></canvas>
+<div class="ball"></div>
+<button id="btnInit">Set</button>
+<p id="text2"/>
+<form>
+	<label>Max</label><input type="text" id="max">
+	<label>Min</label><input type="text" id="min">
+	<input type="submit" id="set">
+</form>
+<pre id="text"/>
+
+
+<script src="socket.io.js"></script>
+<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/1.0.2/Chart.min.js"></script>-->
+
+<script type="text/javascript" src="smoothie.js"></script>
+
+<script type="text/javascript">
+
+
+var socket = io();
+var orienObject = {
+	absolute:0,
+	alpha:0,
+	beta:0,
+	gamma:0
+};
+var content1 = document.getElementById("text");
+var content2 = document.getElementById("text2");
+var btnInit = document.getElementById("btnInit");
+content1.innerHTML = "";
+content2.innerHTML = "";
+var ball = document.querySelector(".ball");
+var topball = 350;
+var left = 550;
+var originalAngle = 0;
+var start = false;
+var distance = 1250;
+var oldAngle = 0;
+var smoothie = null;
+var line1 = new TimeSeries();
+var yrange = {max:90,min:0};
+var factor = 0.5;
+function Buffer(bufferSize) {
+	var data=[];
+	return {
+		getValue: function() {
+			if (data.length<bufferSize) {
+				console.log('Not enought data');
+				return 0;
+			}
+			var sum=0;
+			for (i=0;i<data.length;i++) {
+				sum=sum+data[i];
+			}
+			return sum/data.length;
+		},
+		putValue: function(value) {
+			if (data.length<bufferSize) {
+				data[data.length] = value;
+			} else {
+				data.shift();
+				data[data.length] = value;
+			}
+		}
+	}
+};
+var myBuffer = Buffer(50);
+
+function keyEvent(event) {
+	// console.log("event.code="+event.keyCode);
+	switch (event.keyCode) {
+		case 87:
+			topball -= 1;
+			break;
+		case 83:
+	      	topball += 1;
+	      	break;
+    	case 65:
+	      	left -= 1;
+	     	break;
+    	case 68:
+     		left += 1;
+      		break;
+	}
+	ball.style.top = topball + "px";
+	// console.log("top="+topball);
+	ball.style.left = left + "px";
+}
+function handleMotion(event) {
+	//if (isMobile.any()) {
+		
+		content1.innerHTML = "acceleration_x="+event.accelerationIncludingGravity.x+ "<br>";
+		content1.innerHTML += "acceleration_y="+event.accelerationIncludingGravity.y+ "<br>";
+		content1.innerHTML += "acceleration_z="+event.accelerationIncludingGravity.z+ "<br>";
+
+		motionObject = {
+			x:event.accelerationIncludingGravity.x,
+			y:event.accelerationIncludingGravity.y,
+			z:event.accelerationIncludingGravity.z
+		}
+		socket.emit('motion', motionObject);
+
+		
+	//}
+}
+
+function handleOrientation(event) {
+	
+	//if (isMobile.any()) {
+		//content1.innerHTML = "absolute="+event.absolute + "\n";
+		content1.innerHTML = "alpha="+event.alpha+ "\n";
+		content1.innerHTML += "beta="+event.beta+ "\n";
+		content1.innerHTML += "gamma="+event.gamma+ "\n";
+		orienObject.absolute = event.absolute;
+		orienObject.alpha = event.alpha;
+		orienObject.beta = event.beta;
+		orienObject.gamma = event.gamma;
+		
+		socket.emit('orientation', orienObject);		
+	//} 
+}
+
+if (!isMobile.any()) {
+	socket.on('orientationReceive', function(orientationObject) {
+		orienObject.alpha = factor*orientationObject.alpha + (1-factor)*orienObject.alpha;
+		orienObject.absolute = orientationObject.absolute;
+		orienObject.beta = orientationObject.beta;
+		orienObject.gamma = orientationObject.gamma;
+
+		if (start) {
+			myBuffer.putValue(orienObject.alpha);
+			var newAngle = (originalAngle - myBuffer.getValue());
+			ball.style.left = distance * Math.tan(newAngle*Math.PI/180) + left + 'px';
+			//console.log('------------------------------');
+			//console.log('originalAngle='+originalAngle);
+			//console.log('orienObject.alpha='+orienObject.alpha);
+			//console.log('tan='+Math.tan(orienObject.alpha - originalAngle));
+			//console.log('left='+left);
+			//console.log('ball_left='+ball.style.left);
+			//console.log('alpha='+orienObject.alpha);
+
+			console.log(myBuffer.getValue());
+		}
+	});
+	
+		
+
+	socket.on('motionReceive', function(motionObject) {
+		console.log(motionObject);
+	})
+}
+window.addEventListener('deviceorientation', handleOrientation);
+//window.addEventListener('devicemotion', handleMotion, true);
+
+btnInit.addEventListener("click", function () {
+	console.log('click');
+	originalAngle = orienObject.alpha;
+	start = true;
+	content1.innerHTML = originalAngle;
+	function myYRangeFunction(range) {
+	  // TODO implement your calculation using range.min and range.max
+	  //var min = ...;
+	  //var max = ...;
+	  return {min: yrange.min, max: yrange.max};
+	}
+	smoothie = new SmoothieChart({yRangeFunction:myYRangeFunction});
+	smoothie.streamTo(document.getElementById("mycanvas"));
+	smoothie.addTimeSeries(line1);
+	setInterval(function() {
+	  line1.append(new Date().getTime(), myBuffer.getValue());
+	}, 10);
+});
+
+
+/*
+TEST AREA
+*/
+</script>
+
+</body>
+</html>
