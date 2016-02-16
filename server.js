@@ -28,9 +28,21 @@ io.on('connection', function(socket){
     io.emit('motionReceive', motionObject);
   });
 
-  socket.on('m_line_up', function() {
-    io.emit('s_line_up');
-    console.log('Line up');
+  socket.on('m_keyUP_down', function() {
+    io.emit('s_keyUP_down');
+    console.log('s_keyUP_down');
+  });
+  socket.on('m_keyDOWN_down', function() {
+    io.emit('s_keyDOWN_down');
+    console.log('s_keyDOWN_down');
+  });
+  socket.on('m_keyUP_up', function() {
+    io.emit('s_keyUP_up');
+    console.log('s_keyUP_up');
+  });
+  socket.on('m_keyDOWN_up', function() {
+    io.emit('s_keyDOWN_up');
+    console.log('s_keyDOWN_up');
   });
 
 });
