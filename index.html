@@ -5,7 +5,7 @@
 	<title>Blance game</title>
 	<script type="text/javascript" src="js/phaser.js"></script>
 	<script type="text/javascript" src="js/utils.js"></script>
-	<script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+	<script src="js/socket.io.js"></script>
 
     <style type="text/css">
         body {
@@ -52,23 +52,17 @@ if (!isMobile.any()) {
 	});
 
 	socket.on('s_keyUP_down', function() {
-		//console.log('m_keyUP_down');
 		input.isInputUp = true;
 	});
 	socket.on('s_keyUP_up', function() {
-		//console.log('m_keyUP_up');
 		input.isInputUp = false;
 	});
 
 
 	socket.on('s_keyDOWN_down', function() {
-		//console.log('m_keyDOWN_down');
 		input.isInputDown = true;
 	});
 	socket.on('s_keyDOWN_up', function() {
-		//console.log('m_keyDOWN_up');
-		// line.body.velocity.y += power*Math.cos(line.angle*Math.PI/180);
-		// line.body.velocity.x -= power*Math.sin(line.angle*Math.PI/180);
 		input.isInputDown = false;
 	});
 }
@@ -79,23 +73,25 @@ if (!isMobile.any()) {
 	//var cursor;
 
 	var player;
-	var line;
 	var power = 10;
 	var rotationSpeed = 1;
 	var balanceBeta = 0;
 	var fire;
 	var state = 'off';
-
+	var bulletManager;
+	var bulletTime = 0;
+	var bulletTimeInterval = 200;
+	var bulletPower = 400;
 	var input = {
 		isInputUp: false, 
-		isInputDown: false, 
-		lastInputUp: false
+		isInputDown: false
 	};
 
 	function preload() {
 	    game.load.image('bg', 'assets/bg.png');
-	    game.load.image('line', 'assets/line.png');
+	    game.load.image('player', 'assets/line.png');
 	    game.load.spritesheet('fire', 'assets/fire.png', 11, 32);
+	    game.load.image('bullet', 'assets/bullet.png');
 	}
 
 	function create() {
@@ -105,41 +101,61 @@ if (!isMobile.any()) {
 		game.physics.startSystem(Phaser.Physics.ARCADE);
 		game.add.sprite(0, -500, 'bg');
 
-		line = game.add.sprite(0, 0, 'line');
+		player = game.add.sprite(0, 0, 'player');
 
-		//line = game.add.sprite(0, 0, 'line');
-		game.physics.arcade.enable(line);
-		line.body.collideWorldBounds = true;
-		line.body.gravity.y = 200;
-		line.body.bounce.y = 0.2;
-		line.angle = Math.random()*90;
-		line.position.x = game.width/2 - line.width/2;
-		line.anchor.x = 0.5;
-		line.anchor.y = 0.5;
-		
-		line.firePos = {
+		//player = game.add.sprite(0, 0, 'player');
+		game.physics.arcade.enable(player);
+		player.body.collideWorldBounds = true;
+		player.body.gravity.y = 200;
+		player.body.bounce.y = 0.2;
+		player.angle = Math.random()*90;
+		player.position.x = game.width/2 - player.width/2;
+		player.anchor.x = 0.5;
+		player.anchor.y = 0.5;
+		player.mana = 100;
+
+		player.firePos = {
 			pos0: -0.5,
 			pos1: 0,
 			pos2: 0.5
 		};
 
-		fires = game.add.group();
-		//fires.enableBody = true;
-		
-		fires.create(line.width*line.firePos.pos0, line.height/2, 'fire');
-		fires.create(line.width*line.firePos.pos1, line.height/2, 'fire');
-		fires.create(line.width*line.firePos.pos2, line.height/2, 'fire');
+		fires1 = game.add.group();
+		fires1.create(player.width * player.firePos.pos0, player.height/2, 'fire');
+		fires1.create(player.width * player.firePos.pos1, player.height/2, 'fire');
+		fires1.create(player.width * player.firePos.pos2, player.height/2, 'fire');
+
+		fires2 = game.add.group();
+		fires2.create(player.width * player.firePos.pos0, -player.height/2, 'fire');
+		fires2.create(player.width * player.firePos.pos1, -player.height/2, 'fire');
+		fires2.create(player.width * player.firePos.pos2, -player.height/2, 'fire');
 
 		// Adjust position to center
-		fires.getAt(1).x -= fires.getAt(1).width/2;
-		fires.getAt(2).x -= fires.getAt(2).width;
+		fires1.getAt(1).x -= fires1.getAt(1).width/2;
+		fires1.getAt(2).x -= fires1.getAt(2).width;
+		fires2.getAt(1).x -= fires2.getAt(1).width/2;
+		fires2.getAt(2).x -= fires2.getAt(2).width;
 
-		fires.callAll('animations.add', 'animations', 'fire_up', [0, 1, 2, 3, 4, 5, 6], 20, false, true);
-		fires.callAll('animations.add', 'animations', 'fire_up_release', [6, 5 ,4, 3, 2, 1, 0, 7], 20, false, true);
-		fires.setAllChildren('frame', 7);
-		// fires.setAllChildren('body.gravity.y', 200);
-		// fires.setAllChildren('body.bounce.y', 0.2);
-		line.addChild(fires);
+		fires2.getAt(0).y -= (fires2.getAt(0).height);
+		fires2.getAt(1).y -= (fires2.getAt(1).height);
+		fires2.getAt(2).y -= (fires2.getAt(2).height);
+
+		fires1.callAll('animations.add', 'animations', 'fire_up', [0, 1, 2, 3, 4, 5, 6], 20, false, true);
+		fires1.callAll('animations.add', 'animations', 'fire_up_release', [6, 5 ,4, 3, 2, 1, 0, 7], 20, false, true);
+		fires2.callAll('animations.add', 'animations', 'fire_down', [8, 9, 10, 11, 12, 13, 14], 20, false, true);
+		fires2.callAll('animations.add', 'animations', 'fire_down_release', [14, 13 ,12, 11, 10, 9, 8, 7], 20, false, true);
+		fires1.setAllChildren('frame', 7);
+		fires2.setAllChildren('frame', 7);
+		player.addChild(fires1);
+		player.addChild(fires2);
+
+		bulletManager = game.add.group();
+		bulletManager.enableBody = true;
+		bulletManager.physicsBodyType = Phaser.Physics.ARCADE;
+		bulletManager.createMultiple(30, 'bullet', 0, false);
+		bulletManager.setAll('outOfBoundsKill', true);
+    	bulletManager.setAll('checkWorldBounds', true);
+
 	    game.input.onDown.add(function () {
 		    	game.scale.startFullScreen(false);
 		    }, this);
@@ -148,44 +164,63 @@ if (!isMobile.any()) {
 
 	function update() {
 		
-		console.log(input.isInputUp + ";" + state);
-		if (input.isInputUp & state=='off') {
-			line.body.velocity.y -= power*Math.cos(line.angle*Math.PI/180);
-			line.body.velocity.x += power*Math.sin(line.angle*Math.PI/180);
-			fires.callAll('play', null, 'fire_up');
-			state = 'powering';
+		console.log("input_up: " + input.isInputUp + ";" + state);
+		if (input.isInputUp & state == 'off') {
+			player.body.velocity.y -= power*Math.cos(player.angle*Math.PI/180);
+			player.body.velocity.x += power*Math.sin(player.angle*Math.PI/180);
+			fires1.callAll('play', null, 'fire_up');
+			state = 'up_powering';
+			console.log('fire_up');
 		} 
-		else if (input.isInputUp & state == 'powering') {
-			line.body.velocity.y -= power*Math.cos(line.angle*Math.PI/180);
-			line.body.velocity.x += power*Math.sin(line.angle*Math.PI/180);
+		else if (input.isInputUp & state == 'up_powering') {
+			player.body.velocity.y -= power*Math.cos(player.angle*Math.PI/180);
+			player.body.velocity.x += power*Math.sin(player.angle*Math.PI/180);
 		}
-		else if (!input.isInputUp & state == 'powering') {
-			line.body.velocity.y += power*Math.cos(line.angle*Math.PI/180);
-			line.body.velocity.x -= power*Math.sin(line.angle*Math.PI/180);
-			fires.callAll('play', null, 'fire_up_release');
+		else if (!input.isInputUp & state == 'up_powering') {
+			player.body.velocity.y += power*Math.cos(player.angle*Math.PI/180);
+			player.body.velocity.x -= power*Math.sin(player.angle*Math.PI/180);
+			fires1.callAll('play', null, 'fire_up_release');
 			state = 'off';
 		}
-
-		line.angle = orienObject.beta - balanceBeta;
-		
-		
-		// else if (!input.isInputUp & state != 'powering') {
-		// 	line.body.velocity.y += power*Math.cos(line.angle*Math.PI/180);
-		// 	line.body.velocity.x -= power*Math.sin(line.angle*Math.PI/180);
+	
+		// console.log("input_down: " + input.isInputDown + ";" + state);
+		// if (input.isInputDown & state=='off') {
+		// 	player.body.velocity.y += power*Math.cos(player.angle*Math.PI/180);
+		// 	player.body.velocity.x -= power*Math.sin(player.angle*Math.PI/180);
+		// 	fires2.callAll('play', null, 'fire_down');
+		// 	state = 'down_powering';
+		// } 
+		// else if (input.isInputDown & state == 'down_powering') {
+		// 	player.body.velocity.y += power*Math.cos(player.angle*Math.PI/180);
+		// 	player.body.velocity.x -= power*Math.sin(player.angle*Math.PI/180);
 		// }
-
-		// if (cursor.left.isDown) {
-		// 	line.angle -= rotationSpeed;
-		// } else if (cursor.right.isDown) {
-		// 	line.angle += rotationSpeed;
+		// else if (!input.isInputDown & state == 'down_powering') {
+		// 	player.body.velocity.y -= power*Math.cos(player.angle*Math.PI/180);
+		// 	player.body.velocity.x += power*Math.sin(player.angle*Math.PI/180);
+		// 	fires2.callAll('play', null, 'fire_down_release');
+		// 	state = 'off';
 		// }
-
+		if (input.isInputDown) {
+			fire();
+		}
 		
-		//input.reset();
-	} 
+		player.angle = orienObject.beta - balanceBeta;
+	}
 
 	function render() {
 		
+	}
+
+	function fire() {
+		if (game.time.now > bulletTime) {
+			var bullet = bulletManager.getFirstExists(false);
+			bullet.reset(player.x - bullet.width/2, player.y - player.height/2 - bullet.height);
+			bulletTime = game.time.now + bulletTimeInterval;
+			bullet.body.gravity.y = 100;
+
+			bullet.body.velocity.y = (-bulletPower * Math.cos(player.angle*Math.PI/180) + player.body.velocity.y);
+			bullet.body.velocity.x = (bulletPower * Math.sin(player.angle*Math.PI/180) + player.body.velocity.x);
+		}
 	}
 
 } else {
